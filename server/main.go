@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/jonfk/golang-chat/tcp/common"
-	"io"
 	"log"
 	"net"
-	"os"
+	"encoding/gob"
+	// "sync"
 )
 
 const (
@@ -15,67 +14,55 @@ const (
 	CONN_TYPE = "tcp"
 )
 
-var (
-	connections []net.Conn
-)
+var connections = make(map[int]net.Conn) 
+var id = 0
 
 func main() {
-	// Listen for incoming connections.
-	l, err := net.Listen(CONN_TYPE, CONN_HOST+":"+CONN_PORT)
+	l, err := net.Listen(CONN_TYPE, CONN_HOST + ":" + CONN_PORT)
 	if err != nil {
 		fmt.Println("Error listening:", err.Error())
-		os.Exit(1)
+		return
 	}
-	// Close the listener when the application closes.
+	
 	defer l.Close()
+	
 	fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
 	for {
-		// Listen for an incoming connection.
 		conn, err := l.Accept()
 		if err != nil {
 			fmt.Println("Error accepting: ", err.Error())
-			os.Exit(1)
+			return
 		}
-		// Save connection
-		connections = append(connections, conn)
-		// Handle connections in a new goroutine.
-		go handleRequest(conn)
+		id++
+		connections[id] = conn
+		go handleRequest(id, conn)
 	}
 }
 
-// Handles incoming requests.
-func handleRequest(conn net.Conn) {
+func handleRequest(id int, conn net.Conn) {
+	defer func(){
+		conn.Close()
+		delete(connections, id)
+	}()
+
 	for {
-		msg, err := common.ReadMsg(conn)
+		var msg string
+		err := gob.NewDecoder(conn).Decode(&msg)
+		// msg, err := common.ReadMsg(conn)
 		if err != nil {
-			if err == io.EOF {
-				// Close the connection when you're done with it.
-				removeConn(conn)
-				conn.Close()
-				return
-			}
 			log.Println(err)
 			return
 		}
 		fmt.Printf("Message Received: %s\n", msg)
-		broadcast(conn, msg)
+		// broadcast(conn, msg)
 	}
 }
 
-func removeConn(conn net.Conn) {
-	var i int
-	for i = range connections {
-		if connections[i] == conn {
-			break
-		}
-	}
-	connections = append(connections[:i], connections[i+1:]...)
-}
 
 func broadcast(conn net.Conn, msg string) {
-	for i := range connections {
-		if connections[i] != conn {
-			err := common.WriteMsg(connections[i], msg)
+	for _, c := range connections {
+		if c != conn {
+			err := gob.NewDecoder(c).Decode(&msg)
 			if err != nil {
 				log.Println(err)
 			}

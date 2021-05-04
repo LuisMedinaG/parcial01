@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 )
 
 const (
@@ -14,8 +15,9 @@ const (
 )
 
 type Message struct {
-	Text string
-	File []byte
+	Text     string
+	FileName string
+	FileBs   []byte
 }
 
 type Chat struct {
@@ -67,7 +69,7 @@ func (chat *Chat) HandleRequest(conn net.Conn) {
 		delete(chat.clients, conn)
 	}()
 
-	var text string
+	// var text string
 	var message Message
 	for {
 		err := gob.NewDecoder(conn).Decode(&message)
@@ -79,12 +81,11 @@ func (chat *Chat) HandleRequest(conn net.Conn) {
 			log.Fatal("ERROR Listening: ", err)
 			return
 		}
-		if len(message.File) > 0 {
-			// TODO recive file
-			log.Println("File recived")
-			// save file
-			// messages = append(messages, message.File)
-			// text = message.FileName
+
+		var text string
+		if len(message.FileBs) > 0 {
+			text = "File recived: " + message.FileName
+			createFileFromByteSlc(message)
 		} else {
 			text = message.Text
 		}
@@ -99,6 +100,21 @@ func (chat *Chat) Broadcast(message Message) {
 		if err != nil {
 			log.Fatal("Error Broadcasting:", err)
 		}
+	}
+}
+
+func createFileFromByteSlc(message Message) {
+	file, err := os.Create(message.FileName)
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	defer file.Close()
+
+	_, err = file.Write(message.FileBs)
+	if err != nil {
+		log.Fatal(err)
+		return
 	}
 }
 

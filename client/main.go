@@ -30,8 +30,9 @@ type Client struct {
 }
 
 type Message struct {
-	Text string
-	File []byte
+	Text     string
+	FileName string
+	FileBs   []byte
 }
 
 func NewClient(host string, port string) *Client {
@@ -74,11 +75,8 @@ func (client *Client) HandleServerMsg() {
 			log.Fatal("ERROR Listening: ", err)
 			os.Exit(1)
 		}
-		if len(message.File) > 0 {
-			// TODO recive filename
-			log.Println("File recived")
-			// messages = append(messages, message.File)
-			// text = message.FileName
+		if len(message.FileBs) > 0 {
+			text = "File recived: " + message.FileName
 		} else {
 			text = message.Text
 		}
@@ -100,6 +98,32 @@ func Input(inputTxt string) string {
 	return text[:len(text)-1]
 }
 
+func getFileBytes(filename string) []byte {
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatal(err)
+		return nil
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		log.Fatal(err)
+		return nil
+	}
+
+	total := stat.Size()
+	data := make([]byte, total)
+
+	_, err = file.Read(data)
+	if err != nil {
+		log.Fatal(err)
+		return nil
+	}
+
+	return data
+}
+
 func getMenuOpt() (opt int) {
 	fmt.Println(`
 ********* CLIENTE *********
@@ -116,7 +140,6 @@ Ingrese opcion: `)
 func main() {
 	client := NewClient(HOST, PORT)
 
-	var message Message
 	for {
 		opt := getMenuOpt()
 		switch opt {
@@ -130,8 +153,13 @@ func main() {
 			client.sendMessge(message)
 		case 2:
 			fmt.Println("\n --- Enviar archivo ---\n")
-			// message.File = make([]byte, 5)
-			// TODO enviar archivo
+			fileName := Input("Nombre del archivo: ")
+			data := getFileBytes(fileName)
+
+			message := Message{
+				FileName: fileName,
+				FileBs:   data,
+			}
 
 			client.sendMessge(message)
 		case 3:

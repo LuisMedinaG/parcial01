@@ -9,79 +9,90 @@ import (
 )
 
 const (
-	HOST      = "localhost"
-	PORT      = "3333"
+	HOST = "localhost"
+	PORT = "3333"
 )
 
 type Message struct {
-	Text     string
-	File     []byte
+	Text string
+	File []byte
 }
 
-type ChatRoom struct {
-	clients  [net.Conn]string
+type Chat struct {
+	usrCount int
+	Host     string
+	Port     string
+	clients  map[net.Conn]int
 	messages []string
 }
 
-func NewChatRoom() *ChatRoom {
-	chatRoom := &ChatRoom{
-		connections = make(map[net.Conn]string, 0)
-		messages = make([]string, 0)
+func NewChat(host string, port string) *Chat {
+	chat := &Chat{
+		usrCount: 0,
+		Host:     host,
+		Port:     port,
+		clients:  make(map[net.Conn]int),
+		messages: make([]string, 0),
 	}
+	go chat.Listen()
 
-	chatRoom.Listen()
-
-	return chatRoom
+	return chat
 }
 
-func (chatRoom *ChatRoom) Listen() {
-	listener, err := net.Listen("tcp", HOST+":"+PORT)
-	log.Println("Listening on " + HOST + ":" + PORT)
+func (chat *Chat) Listen() {
+	listener, err := net.Listen("tcp", chat.Host+":"+chat.Port)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 	defer listener.Close()
 
-	// go routine here or...
 	for {
-		conn, _ := listener.Accept()
-		go HandleRequest(conn)
-		// menu here?
-	}
-}
-
-func (chatRoom *ChatRoom) HandleRequest(conn net.Conn) {
-	defer func(){
-		conn.Close()
-		delete(chatRoom.clients, conn)
-	}()
-		
-	chatRoom.clients[conn] = "id"
-	var message Message
-	for {
-		err := gob.NewDecoder(conn).Decode(&message)
-		if err == io.EOF {
-			fmt.Println("Client connection closed.")
-			return
-		}		
+		conn, err := listener.Accept()
 		if err != nil {
 			log.Println(err)
 			return
 		}
-		
-		if len(message.File) > 0 {
-			log.Println("File recived")
-			// messages = append(messages, message.File)
-		} else {
-			messages = append(messages, message.Text)
-		}
-		Broadcast(message)
+
+		chat.clients[conn] = chat.usrCount
+		chat.usrCount++
+
+		go chat.HandleRequest(conn)
 	}
 }
 
-func (chatRoom *ChatRoom) Broadcast(message Message) {
-	for conn, _ := range chatRoom.clients {
+func (chat *Chat) HandleRequest(conn net.Conn) {
+	defer func() {
+		conn.Close()
+		delete(chat.clients, conn)
+	}()
+
+	var text string
+	var message Message
+	for {
+		err := gob.NewDecoder(conn).Decode(&message)
+		if err == io.EOF {
+			// log.Println("Client connection closed.")
+			return
+		}
+		if err != nil {
+			log.Fatal("ERROR Listening: ", err)
+			return
+		}
+		if len(message.File) > 0 {
+			log.Println("File recived")
+			// messages = append(messages, message.File)
+			// text = message.FileName
+		} else {
+			text = message.Text
+		}
+		chat.messages = append(chat.messages, text)
+		chat.Broadcast(message)
+	}
+}
+
+func (chat *Chat) Broadcast(message Message) {
+	for conn := range chat.clients {
 		err := gob.NewEncoder(conn).Encode(&message)
 		if err != nil {
 			log.Fatal("Error Broadcasting:", err)
@@ -90,7 +101,7 @@ func (chatRoom *ChatRoom) Broadcast(message Message) {
 }
 
 func getMenuOptServ() (opt int) {
-	fmt.Print(`
+	fmt.Println(`
 ********* CLIENTE *********
 1. Mostrar mensajes/archivos enviados
 2. Respaldar mensajes/archivos enviados
@@ -101,123 +112,23 @@ Ingrese opcion: `)
 }
 
 func main() {
-	// chatRoom := NewChatRoom()
-	_ := NewChatRoom()
+	chat := NewChat(HOST, PORT)
+
+	for {
+		opt := getMenuOptServ()
+		switch opt {
+		case 1:
+			fmt.Println("\n ---- Mostrar mensajes ----\n ")
+			for _, msg := range chat.messages {
+				fmt.Println(msg)
+			}
+		case 2:
+			fmt.Println("\n ---- Respaldar mensaje ----\n ")
+		case 3:
+			fmt.Println("\nServidor terminado.")
+			return
+		default:
+			fmt.Println("\nERROR: Opcion invalida.")
+		}
+	}
 }
-
-
-// // ----------------------------------------
-
-// /*
-// Simple TCP chat implementation in Go.
-
-// To start, use : go run ./server.go
-// By default it runs at port 6000
-
-// Connect to it via telnet -
-// (from own machine) : telnet localhost 6000
-
-// (from machine on same network) : telnet [local IP] 6000
-
-// (*from external machine) : telnet [Your public IP] 6000
-// (You need to have port forwarding on using your router)
-
-// */
-// package main
-
-// import (
-// 	"bufio"
-// 	"fmt"
-// 	"log"
-// 	"net"
-// 	"os"
-// 	"strings"
-// 	"io"
-// )
-
-// func main() {
-
-// 	const maxUsers = 2 // By default
-
-// 	users := make(map[net.Conn]string) // Map of active connections
-// 	newConnection := make(chan net.Conn) // Handle new connection
-// 	addedUser := make(chan net.Conn)   // Add new connection
-// 	deadUser := make(chan net.Conn)    // Users that have left chat
-// 	messages := make(chan string)      // channel that recieves messages from all users
-
-// 	server, err := net.Listen("tcp", ":6000")
-// 	if err != nil {
-// 		fmt.Println(err)
-// 		os.Exit(1)
-// 	}
-
-// 	go func() { // Launch routine that will accept connections
-// 		for {
-// 			conn, err := server.Accept()
-// 			if err != nil {
-// 				fmt.Println(err)
-// 				os.Exit(1)
-// 			}
-// 			if len(users) < maxUsers {
-// 				newConnection <- conn // Send to handle new user
-// 			}else{
-// 				io.WriteString(conn, "Server is full!")
-// 			}
-// 		}
-// 	}()
-
-// 	for { // Run forever
-
-// 		select {
-// 		case conn := <-newConnection:
-
-// 			go func(conn net.Conn) { // Ask user for name and information
-// 				reader := bufio.NewReader(conn)
-// 				io.WriteString(conn, "Enter name: ")
-// 				userName, _ := reader.ReadString('\n')
-// 				userName = strings.Trim(userName, "\r\n")
-// 				log.Printf("Accepted new user : %s", userName)
-// 				messages <- fmt.Sprintf("Accepted user : [%s]\n\n", userName)
-
-// 				users[conn] = userName // Add connection
-
-// 				addedUser <- conn // Add user to pool
-// 			}(conn)
-
-// 		case conn := <-addedUser: // Launch a new go routine for the newly added user
-
-// 			go func(conn net.Conn, userName string) {
-// 				reader := bufio.NewReader(conn)
-// 				for { // Run forever and handle this user's messages
-// 					newMessage, err := reader.ReadString('\n')
-// 					newMessage = strings.Trim(newMessage, "\r\n")
-// 					if err != nil {
-// 						break
-// 					}
-// 					// Send to messages channel therefore ring every user
-// 					messages <- fmt.Sprintf(">%s: %s \a\n\n", userName, newMessage)
-// 				}
-
-// 				deadUser <- conn // If error occurs, connection has been terminated
-// 				messages <- fmt.Sprintf("%s disconnected\n\n", userName)
-// 			}(conn, users[conn])
-
-// 		case message := <-messages: // If message recieved from any user
-
-// 			for conn, _ := range users { // Send to all users
-// 				go func(conn net.Conn, message string) { // Write to all user connections
-// 						_, err := io.WriteString(conn, message)
-// 						if err != nil {
-// 							deadUser <- conn
-// 						}
-// 				}(conn, message)
-// 				log.Printf("New message: %s", message)
-// 				log.Printf("Sent to %d users", len(users))
-// 			}
-
-// 		case conn := <-deadUser: // Handle dead users
-// 			log.Printf("Client disconnected")
-// 			delete(users, conn)
-// 		}
-// 	}
-// }

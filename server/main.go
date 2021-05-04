@@ -80,7 +80,9 @@ func (chat *Chat) HandleRequest(conn net.Conn) {
 			return
 		}
 		if len(message.File) > 0 {
+			// TODO recive file
 			log.Println("File recived")
+			// save file
 			// messages = append(messages, message.File)
 			// text = message.FileName
 		} else {
@@ -124,6 +126,7 @@ func main() {
 			}
 		case 2:
 			fmt.Println("\n ---- Respaldar mensaje ----\n ")
+			// TODO respaldar lista de mensaje en un archivo
 		case 3:
 			fmt.Println("\nServidor terminado.")
 			return

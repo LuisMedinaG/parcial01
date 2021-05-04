@@ -75,6 +75,7 @@ func (client *Client) HandleServerMsg() {
 			os.Exit(1)
 		}
 		if len(message.File) > 0 {
+			// TODO recive filename
 			log.Println("File recived")
 			// messages = append(messages, message.File)
 			// text = message.FileName
@@ -129,7 +130,8 @@ func main() {
 			client.sendMessge(message)
 		case 2:
 			fmt.Println("\n --- Enviar archivo ---\n")
-			message.File = make([]byte, 5)
+			// message.File = make([]byte, 5)
+			// TODO enviar archivo
 
 			client.sendMessge(message)
 		case 3:

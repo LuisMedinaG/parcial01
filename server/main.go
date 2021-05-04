@@ -1,27 +1,92 @@
 package main
 
 import (
-	"bufio"
 	"encoding/gob"
 	"fmt"
 	"io"
 	"log"
 	"net"
-	"os"
 )
 
 const (
 	HOST      = "localhost"
 	PORT      = "3333"
-	CONN_TYPE = "tcp"
 )
 
-type Client struct {
-	// id 		 id int
-	incoming chan string
-	outgoing chan string
-	reader   *bufio.Reader
-	writer   *bufio.Writer
+type Message struct {
+	Text     string
+	File     []byte
+}
+
+type ChatRoom struct {
+	clients  [net.Conn]string
+	messages []string
+}
+
+func NewChatRoom() *ChatRoom {
+	chatRoom := &ChatRoom{
+		connections = make(map[net.Conn]string, 0)
+		messages = make([]string, 0)
+	}
+
+	chatRoom.Listen()
+
+	return chatRoom
+}
+
+func (chatRoom *ChatRoom) Listen() {
+	listener, err := net.Listen("tcp", HOST+":"+PORT)
+	log.Println("Listening on " + HOST + ":" + PORT)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer listener.Close()
+
+	// go routine here or...
+	for {
+		conn, _ := listener.Accept()
+		go HandleRequest(conn)
+		// menu here?
+	}
+}
+
+func (chatRoom *ChatRoom) HandleRequest(conn net.Conn) {
+	defer func(){
+		conn.Close()
+		delete(chatRoom.clients, conn)
+	}()
+		
+	chatRoom.clients[conn] = "id"
+	var message Message
+	for {
+		err := gob.NewDecoder(conn).Decode(&message)
+		if err == io.EOF {
+			fmt.Println("Client connection closed.")
+			return
+		}		
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		
+		if len(message.File) > 0 {
+			log.Println("File recived")
+			// messages = append(messages, message.File)
+		} else {
+			messages = append(messages, message.Text)
+		}
+		Broadcast(message)
+	}
+}
+
+func (chatRoom *ChatRoom) Broadcast(message Message) {
+	for conn, _ := range chatRoom.clients {
+		err := gob.NewEncoder(conn).Encode(&message)
+		if err != nil {
+			log.Fatal("Error Broadcasting:", err)
+		}
+	}
 }
 
 func getMenuOptServ() (opt int) {
@@ -35,206 +100,11 @@ Ingrese opcion: `)
 	return opt
 }
 
-func (client *Client) Read() {
-	for {
-		line, _ := client.reader.ReadString('\n')
-		client.incoming <- line
-	}
-}
-
-func (client *Client) Write() {
-	for data := range client.outgoing {
-		client.writer.WriteString(data)
-		client.writer.Flush()
-	}
-}
-
-func (client *Client) Listen() {
-	go client.Read()
-	go client.Write()
-}
-
-func NewClient(connection net.Conn) *Client {
-	writer := bufio.NewWriter(connection)
-	reader := bufio.NewReader(connection)
-
-	client := &Client{
-		incoming: make(chan string),
-		outgoing: make(chan string),
-		reader:   reader,
-		writer:   writer,
-	}
-
-	client.Listen()
-
-	return client
-}
-
-type ChatRoom struct {
-	clients  []*Client
-	joins    chan net.Conn
-	incoming chan string
-	outgoing chan string
-}
-
-func (chatRoom *ChatRoom) Broadcast(data string) {
-	for _, client := range chatRoom.clients {
-		client.outgoing <- data
-	}
-}
-
-func (chatRoom *ChatRoom) Join(connection net.Conn) {
-	client := NewClient(connection)
-	chatRoom.clients = append(chatRoom.clients, client)
-	go func() {
-		for {
-			chatRoom.incoming <- <-client.incoming
-		}
-	}()
-}
-
-func (chatRoom *ChatRoom) Listen() {
-	go func() {
-		for {
-			select {
-			case data := <-chatRoom.incoming:
-				chatRoom.Broadcast(data)
-			case conn := <-chatRoom.joins:
-				chatRoom.Join(conn)
-			}
-		}
-	}()
-}
-
-func NewChatRoom() *ChatRoom {
-	chatRoom := &ChatRoom{
-		clients: make([]*Client, 0),
-		joins:   make(chan net.Conn),
-		// incoming: make(chan string),
-		// outgoing: make(chan string),
-	}
-
-	// chatRoom.Listen()
-
-	return chatRoom
-}
-
-var messages = make([]string, 0)
-var connections = make(map[net.Conn]string)
-
 func main() {
 	// chatRoom := NewChatRoom()
-
-	listener, err := net.Listen("tcp", HOST+":"+PORT)
-	log.Println("Listening on " + HOST + ":" + PORT)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	defer listener.Close()
-
-	for {
-		conn, _ := listener.Accept()
-		log.Println(conn)
-
-		connections[conn] = " "
-		// handle req
-		go func() {
-			defer conn.Close()
-			for {
-				var msg string
-				err := gob.NewDecoder(conn).Decode(&msg)
-				if err == io.EOF {
-					conn.Close()
-					// delete from map
-					fmt.Println("Client closed connection.")
-					os.Exit(0)
-				}
-				if err != nil {
-					log.Println(err)
-					os.Exit(1)
-				}
-				messages = append(messages, msg)
-				broadcast(conn, msg)
-			}
-		}()
-	}
-	// chatRoom.joins <- conn
+	_ := NewChatRoom()
 }
 
-// // ----------------------------------------------------------------
-
-// package main
-
-// import (
-// 	"log"
-// 	"net"
-// 	"io"
-// 	"encoding/gob"
-// )
-
-// const (
-// 	HOST = "localhost"
-// 	PORT = "3333"
-// 	CONN_TYPE = "tcp"
-// )
-
-// var id = 0
-
-// func main() {
-// 	l, err := net.Listen(CONN_TYPE, HOST + ":" + PORT)
-// 	if err != nil {
-// 		log.Println("Error listening:", err.Error())
-// 		return
-// 	}
-
-// 	defer l.Close()
-
-// 	log.Println("Listening on " + HOST + ":" + PORT)
-// 	for {
-// 		conn, err := l.Accept()
-// 		if err != nil {
-// 			log.Println("Error accepting: ", err.Error())
-// 			return
-// 		}
-// 		id++
-// 		connections[id] = conn
-// 		go handleRequest(id, conn)
-// 	}
-// }
-
-// func handleRequest(id int, conn net.Conn) {
-// 	defer func(){
-// 		conn.Close()
-// 		delete(connections, id)
-// 	}()
-
-// 	for {
-// 		var msg string
-// 		err := gob.NewDecoder(conn).Decode(&msg)
-// 		if err == io.EOF {
-// 			// Close conn and exit
-// 			conn.Close()
-// 			log.Println("Connection Closed.")
-// 			return
-// 		}
-// 		if err != nil {
-// 			log.Println(err)
-// 			return
-// 		}
-// 		// log.Printf("Message Received: %s\n", msg)
-// 		broadcast(conn, msg)
-// 	}
-// }
-
-func broadcast(conn net.Conn, msg string) {
-	for c, _ := range connections {
-		err := gob.NewEncoder(c).Encode(&msg)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-}
 
 // // ----------------------------------------
 

@@ -8,23 +8,29 @@ import (
 	"log"
 	"net"
 	"os"
-	"strconv"
 )
 
 const (
-	HOST = "localhost"
-	PORT = "3333"
+	HOST      = "localhost"
+	PORT      = "3333"
 )
+var messages []string
 
 type Client struct {
-	userName string
-	msg      string
-	file     []byte
+	messages []string
+	conn 	net.Conn
 }
+
+type Message struct {
+	Text     string
+	File     []byte
+}
+
 
 func getMenuOpt() (opt int) {
 	fmt.Print(`
 ********* CLIENTE *********
+
 1. Enviar mensaje
 2. Enviar archivo
 3. Mostrar mensajes recibidos
@@ -34,25 +40,19 @@ Ingrese opcion: `)
 	return opt
 }
 
-var messages = make([]string, 0)
-
-func leerMensajesLlegada(conn net.Conn) {
+func HandleRequest(conn net.Conn) {
+	var message Message
 	for {
-		var msg string
-		err := gob.NewDecoder(conn).Decode(&msg)
-
+		err := gob.NewDecoder(conn).Decode(&message)
 		if err == io.EOF {
-			conn.Close()
-			fmt.Println("Serve closed connection.")
+			fmt.Println("Server connection closed.")
 			os.Exit(0)
 		}
 		if err != nil {
 			log.Fatal(err)
 			os.Exit(1)
 		}
-
-		messages = append(messages, msg)
-		fmt.Println(msg)
+		messages = append(messages, message.Text)
 	}
 }
 
@@ -64,42 +64,43 @@ func main() {
 	}
 	defer conn.Close()
 
-	var userName string
-	firstMsg := true
-
-	go leerMensajesLlegada(conn)
+	var message Message 
+	var usrSet bool
+	messages = make([]string, 0)
+	
+	go HandleRequest(conn)
 	for {
 		opt := getMenuOpt()
 		switch opt {
 		case 1:
-			if firstMsg {
+			fmt.Println("\n ---- Enviar mensaje ----\n")
+			if !usrSet {
 				reader := bufio.NewReader(os.Stdin)
 				fmt.Print("Usuario: ")
-				userName, _ = reader.ReadString('\n')
-				userName = userName[:len(userName)-1]
-				firstMsg = false
+				userName, _ := reader.ReadString('\n')
+				UserName = userName[:len(userName)-1]
+				usrSet = true
 			}
 			reader := bufio.NewReader(os.Stdin)
-			prefix := "@" + userName + ": "
-			fmt.Print(prefix)
-			text, _ := reader.ReadString('\n')
-			text = text[:len(text)-1]
-			text = prefix + text
-
-			err := gob.NewEncoder(conn).Encode(text)
+			fmt.Print(">> ")
+			msg, _ := reader.ReadString('\n')
+			message.Text  = "@" + UserName + ": " +  msg[:len(msg)-1]
+			
+			err := gob.NewEncoder(conn).Encode(message)
 			if err != nil {
 				log.Fatal(err)
 			}
 		case 2:
-
+			fmt.Println("\n --- Enviar archivo ---\n")
+			message.File = make([]byte, 5, 5)
 		case 3:
-			for msg := range messages {
-				fmt.Println("@" + userName + ": " + strconv.Itoa(msg))
+			fmt.Println("\n ---- Mensajes chat ----\n")
+			for _, msg := range messages {
+				fmt.Println(msg)
 			}
 		case 4:
-			log.Println("Client terminated.")
+			fmt.Println("\nConexion terminada.\n")
 			return
 		}
-
 	}
 }

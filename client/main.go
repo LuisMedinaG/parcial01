@@ -3,9 +3,11 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"gob"
+	"encoding/gob"
 	"log"
 	"net"
+	"io"
+	"os"
 )
 
 const (
@@ -21,45 +23,38 @@ func main() {
 	}
 	
 	defer conn.Close()
+	go printOutput(conn)
 	sendMessage(conn)
 }
 
-func sendMessage(conn *net.TCPConn) {
-
-	fmt.Print("Enter username: ")
-	reader := bufio.NewReader(os.Stdin)
-	username, err := reader.ReadString('\n')
-	username = username[:len(username)-1]
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("Enter text: ")
+func sendMessage(conn net.Conn) {
 	for {
+		fmt.Println("Enter text: ")
 		text, err := reader.ReadString('\n')
+		text = text[:len(text)-1]
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = gob.NewEncoder(conn).Encode(msg)
+		err = gob.NewEncoder(conn).Encode(username+" says "+text)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
 }
 
-// func printOutput(conn *net.TCPConn) {
-// 	for {
+func printOutput(conn net.Conn) {
+	for {
+		var msg string
+		err := gob.NewDecoder(conn).Decode(&msg)
 
-// 		msg, err := common.ReadMsg(conn)
-// 		// Receiving EOF means that the connection has been closed
-// 		if err == io.EOF {
-// 			// Close conn and exit
-// 			conn.Close()
-// 			fmt.Println("Connection Closed. Bye bye.")
-// 			os.Exit(0)
-// 		}
-// 		if err != nil {
-// 			log.Fatal(err)
-// 		}
-// 		fmt.Println(msg)
-// 	}
-// }
+		if err == io.EOF {
+			conn.Close()
+			fmt.Println("Connection Closed.")
+			return
+		}
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(msg)
+	}
+}

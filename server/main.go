@@ -75,14 +75,14 @@ func (chat *Chat) HandleRequest(conn net.Conn) {
 		var message Message
 		err := gob.NewDecoder(conn).Decode(&message)
 		if err == io.EOF {
-			log.Println("\nClient connection closed.")
+			log.Println("Client connection closed.")
 			return
 		}
 		if err != nil {
 			log.Fatal("ERROR Listening: ", err)
 			return
 		}
-		fmt.Println(message)
+
 		if len(message.FileBs) > 0 {
 			text = "File recived: " + message.FileName
 			createFileFromByteSlc(message)

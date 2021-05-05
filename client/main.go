@@ -124,6 +124,14 @@ func getFileBytes(filename string) []byte {
 	return data
 }
 
+func fileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
+
 func getMenuOpt() (opt int) {
 	fmt.Println(`
 ********* CLIENTE *********
@@ -145,7 +153,6 @@ func main() {
 		switch opt {
 		case 1:
 			fmt.Println("\n ---- Enviar mensaje ----\n")
-
 			text := Input(">> ")
 			message := Message{
 				Text: "@" + client.usrName + ": " + text,
@@ -154,8 +161,12 @@ func main() {
 		case 2:
 			fmt.Println("\n --- Enviar archivo ---\n")
 			fileName := Input("Nombre del archivo: ")
-			data := getFileBytes(fileName)
+			if !fileExists(fileName) {
+				fmt.Println("ERROR: Archivo", fileName, "no existe.")
+				continue
+			}
 
+			data := getFileBytes(fileName)
 			message := Message{
 				FileName: fileName,
 				FileBs:   data,

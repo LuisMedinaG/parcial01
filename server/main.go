@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 )
 
 const (
@@ -69,20 +70,19 @@ func (chat *Chat) HandleRequest(conn net.Conn) {
 		delete(chat.clients, conn)
 	}()
 
-	// var text string
-	var message Message
+	var text string
 	for {
+		var message Message
 		err := gob.NewDecoder(conn).Decode(&message)
 		if err == io.EOF {
-			// log.Println("Client connection closed.")
+			log.Println("\nClient connection closed.")
 			return
 		}
 		if err != nil {
 			log.Fatal("ERROR Listening: ", err)
 			return
 		}
-
-		var text string
+		fmt.Println(message)
 		if len(message.FileBs) > 0 {
 			text = "File recived: " + message.FileName
 			createFileFromByteSlc(message)
@@ -100,6 +100,17 @@ func (chat *Chat) Broadcast(message Message) {
 		if err != nil {
 			log.Fatal("Error Broadcasting:", err)
 		}
+	}
+}
+
+func (chat *Chat) backupMessages(fileName string) {
+	file, err := os.Create(fileName)
+	if err != nil {
+		return
+	}
+
+	for _, txt := range chat.messages {
+		fmt.Fprintln(file, txt)
 	}
 }
 
@@ -142,7 +153,8 @@ func main() {
 			}
 		case 2:
 			fmt.Println("\n ---- Respaldar mensaje ----\n ")
-			// TODO respaldar lista de mensaje en un archivo
+			dt := time.Now()
+			chat.backupMessages("backup_" + dt.Format("010206_150405") + ".txt")
 		case 3:
 			fmt.Println("\nServidor terminado.")
 			return

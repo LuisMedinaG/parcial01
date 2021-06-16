@@ -7,12 +7,12 @@ import (
 	"log"
 	"net"
 	"os"
-	"time"
+	"bufio"
 )
 
 const (
 	HOST = "localhost"
-	PORT = "3333"
+	PORT = "8080"
 )
 
 type Message struct {
@@ -22,6 +22,7 @@ type Message struct {
 }
 
 type Chat struct {
+	Topic: string
 	usrCount int
 	Host     string
 	Port     string
@@ -129,37 +130,73 @@ func createFileFromByteSlc(message Message) {
 	}
 }
 
-func getMenuOptServ() (opt int) {
-	fmt.Println(`
-********* CLIENTE *********
-1. Mostrar mensajes/archivos enviados
-2. Respaldar mensajes/archivos enviados
-3. Terminar servidor
-Ingrese opcion: `)
-	fmt.Scan(&opt)
-	return opt
+func (midleware *Midleware) GetAPort() string {
+	fmt.Println("Obteniendo puertos disponilbes del midleware")
+	c, err := rpc.Dial("tcp", midleware.addr+':'+midleware.port)
+	if err != nil {
+		fmt.Println("Error no se pudo conectar con el middleware")
+		return
+	}
+	
+	var port string
+	errc := c.Call("Midleware.GetAvailablePorts", true, &port)
+	if errc != nil {
+		fmt.Println(errc)
+		return 
+	}
+	c.Close()
+
+	return port
+}
+
+func Input(inputTxt string) string {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print(inputTxt)
+	text, _ := reader.ReadString('\n')
+	return text[:len(text)-1]
 }
 
 func main() {
-	chat := NewChat(HOST, PORT)
-
-	for {
-		opt := getMenuOptServ()
-		switch opt {
-		case 1:
-			fmt.Println("\n ---- Mostrar mensajes ----\n ")
-			for _, msg := range chat.messages {
-				fmt.Println(msg)
-			}
-		case 2:
-			fmt.Println("\n ---- Respaldar mensaje ----\n ")
-			dt := time.Now()
-			chat.backupMessages("backup_" + dt.Format("010206_150405") + ".txt")
-		case 3:
-			fmt.Println("\nServidor terminado.")
-			return
-		default:
-			fmt.Println("\nERROR: Opcion invalida.")
-		}
+	midleware := &Midleware{
+		Host: "localhost",
+		Port: "8080",
 	}
+	
+	topic := Input("Ingregse el topico del chat: ")	
+	port := midleware.GetAPort()
+
+	chat := &Chat{
+		Topic: topic,
+		Port: port,
+	}
+	
+	go chat.Listen()
+
+	// enviarlo detalles del chat creado al midleware
+
+	// Esperar por mensajes y hacer brodcast a todos los clientes conectados
+
+
+
+	// ------------------- DELETE BEGIN -----------------
+	// for {
+	// 	opt := getMenuOptServ()
+	// 	switch opt {
+	// 	case 1:
+	// 		fmt.Println("\n ---- Mostrar mensajes ----\n ")
+	// 		for _, msg := range chat.messages {
+	// 			fmt.Println(msg)
+	// 		}
+	// 	case 2:
+	// 		fmt.Println("\n ---- Respaldar mensaje ----\n ")
+	// 		dt := time.Now()
+	// 		chat.backupMessages("backup_" + dt.Format("010206_150405") + ".txt")
+	// 	case 3:
+	// 		fmt.Println("\nServidor terminado.")
+	// 		return
+	// 	default:
+	// 		fmt.Println("\nERROR: Opcion invalida.")
+	// 	}
+	// }
+	// ------------------- DELETE END -----------------
 }

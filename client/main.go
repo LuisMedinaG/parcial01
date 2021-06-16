@@ -12,7 +12,7 @@ import (
 
 const (
 	HOST = "localhost"
-	PORT = "3333"
+	PORT = "8080"
 )
 
 // type File struct {
